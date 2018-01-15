@@ -8,63 +8,85 @@ syms x1 x2 x3 x4 x5 a1 a2 a3 a4 a5 a6 a7 F1 F2 alpha beta;
 
 %Model Parameters
 % a1 - Scaler Multiplier for PET
-% a2 - Imperviousness Ratio
-% a3 - Soil's Water Capacity
-% a4 - Hydraulic Conductivity
-% a5 - Overland Tank Leak
-% a6 - Interflow Tank Leak
-% a7 - Infiltration Curve Exponent
+% a2 - Soil's Water Capacity
+% a3 - Imperviousness Ratio
+% a4 - Infiltration Curve Exponent
+% a5 - Hydraulic Conductivity
+% a6 - Overland Tank Leak
+% a7 - Interflow Tank Leak
 
 %% Water Balance Computations
 %
+% Actual ET: Computed as either adjusted PET if P > PET, or otherwise ExcessET from soil.
+%cond1 = P - PKE*PET
+cond1 = (F1-a1*F2);   
+approx_f1 = 1/(1+exp(-alpha*(cond1)+beta));
+
+%cond2 = ExcessET
+cond2 = (a1*F2 - F1)*(x1/a2)*(1-approx_f1);
+approx_f2 = 1/(1+exp(-alpha*(cond2)+beta));
+
+% M1 = aET
+M1 = a1*F2*approx_f1 + cond2*(1-approx_f2) + (x1*approx_f2 + F1)*(1-approx_f1);
+
 % Soil Precipitation: This is the precip that makes it to the soil.
-% cPSoil = (cP-caET) .* (1 - PIM);
+% M2 = cPSoil
+M2 = ((F1-a1*F2)*(1-a3))*approx_f1;
 
-cond1 = (F1-a1*F2); %P - aET   
-approx_f1 = 1+exp(-alpha*(cond1)+beta);
-M1 = ((F1-a1*F2)*(1-a2))/approx_f1; %PrecipSoil
+% Infiltration
+im = a2*(1+a4);
+it = im*(1-(1-x1/a2)^(1/(1+a4)));
 
-% excessET(cPSoil <= 0) = (caET(cPSoil <= 0) - cP(cPSoil <= 0)) .* cSM(cPSoil <= 0) ./ PWM(cPSoil <= 0);
+cond3 = M2+it - im;
+approx_f3 = 1/(1 + exp(-alpha*cond3+beta));
+cond4 = (a2-x1);
+approx_f4 = 1/(1 + exp(-alpha*cond4+beta));
 
+% M3 = I
+M3 = ((a2 - x1)*approx_f3 + a2*((1-it/im)^(1+a4)-(1-((it+M1)/im))^(1+a4))*(1-approx_f3))*approx_f4*approx_f1;
 
-%Infiltration
-cond2 = (a3*(1+a7)*(1-(x1/a3))^(1/(1+a7))-M1);
-approx_f2 = 1 + exp(-alpha*cond2+beta);
-cond3 = (a3-x1);
-approx_f3 = 1 + exp(-alpha*cond3-beta);
-M2 = (a3 - x1 - (a3*((1-(x1/a3))^(1/(1+a7))-(M1/(a3*(1+a7))))^(1+a7))/approx_f2)*(1/(approx_f3*approx_f1));
+%Excess Rainfall/Infiltration - R
+approx_f5 = 1/(1 + exp(-alpha*(M2 - M3)+beta));
+M4 = (M2-M3)*(approx_f5);
 
-%Excess Rainfall - ER
-approx_f5 = 1 + exp(-alpha*(M1 - M2)+beta);
-M3 = (M1-M2)/(approx_f5);
+% Soil Moisture Updating - W0 (crest.m)/WA(report) Gaining term
+% M5 = Gaining water
+M5 = a2*(1-approx_f4 + approx_f4*approx_f3) + (x1 + M3)*approx_f4*(1-approx_f3);
 
-%Soil Moisture Updating - W0 (crest.m)/WA(report) Gaining term
-cond8 = a3 - x1 - M2;
-approx_f8 = 1 + exp(-alpha*cond8+beta);
-M6 = ((x1 - a3)/approx_f1 + M2)/approx_f8 + a3/approx_f1;
+% M6 = Losing water
+M6 = (x1 - cond2)*1-approx_f2;
 
-%temX - Gain or loss of water in the soil tank
-M5 = ((a4*x1)/(2*a3)-(a1*F2-F1)*x1/a3)/approx_f1+M6*a4/(2*a3)+(a1*F2-F1)*x1/a3;
+% newx(1) = New Soil Moisture
+newx(1) = M5*approx_f1 + M6*(1-approx_f1);
 
-%Excess Interflow - ERI
-approx_f7 = 1 + exp(-alpha*(M3-M5)+beta);
-M4 = (M5-M3)/approx_f7 + M3;
+%**** NEED TO RE-ASSIGN VARIABLE LETTER (a1, a2, a3 ..)
 
-%Excess Overland - ERO
-M7 = M3 - M4 + (a2*(F1-a1*F2))/approx_f1; %PrecipImperv = (a2*(F1-a1*F2))
-
-%Update States + Flow Routing
-%Soil Moisture
-approx_f11 = 1 + exp(-alpha*(x1-M5)-beta);
-newx(1) = M6 + ((x1-M5)/approx_f11)*(1-1/approx_f1);
-
-%Interflow Reservoir
-newx(2) = x2*(1-a6)+M4;
-
-%Overland Reservoirs
-newx(3) = x3*(1-a5) + M7;
-newx(4) = x4*(1-a5) + a5*x3;
-newx(5) = x5*(1-a5) + a5*x4;
+% cond5 = a3 - x1 - M2;
+% approx_f5 = 1/(1 + exp(-alpha*cond5+beta));
+% M6 = ((x1 - a3)*approx_f1 + M2)*approx_f5 + a3*approx_f1;
+% 
+% %temX - Gain or loss of water in the soil tank
+% M5 = ((a4*x1)/(2*a3)-(a1*F2-F1)*x1/a3)/approx_f1+M6*a4/(2*a3)+(a1*F2-F1)*x1/a3;
+% 
+% %Excess Interflow - ERI
+% approx_f7 = 1 + exp(-alpha*(M3-M5)+beta);
+% M4 = (M5-M3)/approx_f7 + M3;
+% 
+% %Excess Overland - ERO
+% M7 = M3 - M4 + (a2*(F1-a1*F2))/approx_f1; %PrecipImperv = (a2*(F1-a1*F2))
+% 
+% %Update States + Flow Routing
+% %Soil Moisture
+% approx_f11 = 1 + exp(-alpha*(x1-M5)-beta);
+% newx(1) = M6 + ((x1-M5)/approx_f11)*(1-1/approx_f1);
+% 
+% %Interflow Reservoir
+% newx(2) = x2*(1-a6)+M4;
+% 
+% %Overland Reservoirs
+% newx(3) = x3*(1-a5) + M7;
+% newx(4) = x4*(1-a5) + a5*x3;
+% newx(5) = x5*(1-a5) + a5*x4;
 
 %EXPRESSIONS FOR DERIVATIVES (Sensitivities)
 

@@ -135,7 +135,7 @@ for period_i = 1:numel(period)
     %Values for States after Water Balance
     cSM = W0;
     cSM(cSM >= PWM) = PWM(cSM >= PWM);
-    cSM
+    
 
     cER(cER < 0 | isnan(cER) == 1) = -9999;
     geotiffwrite(['CREST_Outputs/CREST_Runoff_mm_month_', num2str(year), num2str(month, '%02.f'), '.tif'], cER, mapinfo.RefMatrix);

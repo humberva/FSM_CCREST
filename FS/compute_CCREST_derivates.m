@@ -3,8 +3,14 @@ clear;
 syms x1 x2 x3 x4 x5 a1 a2 a3 a4 a5 a6 a7 F1 F2 alpha beta;
 
 %% Model variables
+%Forcing
+% F1 - Precipitation Rates
+% F2 - Potential Evapotranspiration
+
 %State Variables
 % x1 - Soil Moisture
+% x2 - Slow Flow Tank
+% x3 - Quick Flow Tanks
 
 %Model Parameters
 % a1 - Scaler Multiplier for PET
@@ -14,6 +20,10 @@ syms x1 x2 x3 x4 x5 a1 a2 a3 a4 a5 a6 a7 F1 F2 alpha beta;
 % a5 - Overland Tank Leak
 % a6 - Interflow Tank Leak
 % a7 - Infiltration Curve Exponent
+
+%Piecewise Approximation Parameters
+% alpha - Slope parameter
+% beta - Inflexion Point Parameter
 
 %% Water Balance Computations
 %
