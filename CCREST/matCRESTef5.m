@@ -1,4 +1,4 @@
-function [cSM, aET, cERI, cERO, infiltration] = matCRESTef5(stepHours, precipIn, petIn, parameters, states)
+function [cSM, aET, cERI, cERO, infiltration, misc] = matCRESTef5(stepHours, precipIn, petIn, parameters, states)
                                  
 precip = precipIn .* stepHours; % precipIn is mm/hr, precip is mm
 pet = petIn .* stepHours; % petIn in mm/hr, pet is mm 
@@ -40,9 +40,11 @@ R(R < 0) = 0;
 
 Wo(precip > adjPET & states.SM < parameters.PWM & precipSoil + A >= Wmaxm) = parameters.PWM(precip > adjPET & states.SM < parameters.PWM & precipSoil + A >= Wmaxm);
 
-infiltration(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm) = parameters.PWM(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm) .* ((1 - A(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm) ./ Wmaxm(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm)) .^ (1 + parameters.PB(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm)) - (1 - (A(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm) + precipSoil(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm)) ./ Wmaxm(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm)).^(1 + parameters.PB(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm)));
+infiltration(precip > adjPET & states.SM < parameters.PWM & (precipSoil + A) >= Wmaxm) = parameters.PWM(precip > adjPET & states.SM < parameters.PWM & (precipSoil + A) >= Wmaxm) - states.SM(precip > adjPET & states.SM < parameters.PWM & (precipSoil + A) >= Wmaxm);
 
-infiltration(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm & infiltration > precipSoil) = precipSoil(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm & infiltration > precipSoil);
+infiltration(precip > adjPET & states.SM < parameters.PWM & (precipSoil + A) < Wmaxm) = parameters.PWM(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm) .* ((1 - A(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm) ./ Wmaxm(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm)) .^ (1 + parameters.PB(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm)) - (1 - (A(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm) + precipSoil(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm)) ./ Wmaxm(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm)).^(1 + parameters.PB(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm)));
+
+% infiltration(precip > adjPET & states.SM < parameters.PWM & (precipSoil + A) < Wmaxm & infiltration > precipSoil) = precipSoil(precip > adjPET & states.SM < parameters.PWM & (precipSoil + A < Wmaxm) & infiltration > precipSoil);
 
 R(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm) = precipSoil(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm) - infiltration(precip > adjPET & states.SM < parameters.PWM & precipSoil + A < Wmaxm);
 
@@ -89,3 +91,5 @@ aET(precip <= adjPET) = ExcessET(precip <= adjPET) + precip(precip <= adjPET);
 
 %states.SM = Wo;
 cSM = Wo; %New Soil moisture
+misc.A = A;
+misc.Wmaxm = Wmaxm;

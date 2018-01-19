@@ -29,6 +29,7 @@ if (precip > adjPET)
         A = Wmaxm * (1 - (1 - states.SM  / parameters.PWM) ^ ( 1 / (1 + parameters.PB)));
       
         if (precipSoil + A >= Wmaxm)
+            %infiltration = (parameters.PWM - states.SM), not explicit in EF5
             R = precipSoil - (parameters.PWM - states.SM); % Leftovers after filling SM
 
             if (R < 0)

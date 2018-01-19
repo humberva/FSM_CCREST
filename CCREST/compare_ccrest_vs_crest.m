@@ -22,13 +22,6 @@ PFC = double(PFC);
 PB = double(PB);
 parameters.PKE = 1;
 
-compgrids = find(rain>0 & PIM >= 0 & PWM > 0 & PB > 0 & PFC > 0);
-
-parameters.PIM = PIM(compgrids);
-parameters.PWM = PWM(compgrids);
-parameters.PFC = PFC(compgrids);
-parameters.PB = PB(compgrids);
-
 %% CREST Run
 %pre-allocate temporary variables
 [nrows,ncols] = size(domain_grid);
@@ -41,19 +34,45 @@ yyyy_i = 1998;
 mm_i = 7;
 
 %Create simulation period
-period = datenum(yyyy_i,mm_i,1):1/24:datenum(yyyy_i,mm_i,2);
+period = datenum(yyyy_i,mm_i,1):1/24:datenum(yyyy_i,mm_i,1);
+
+n_steps = numel(period);
 
 [static_PET,~] = geotiffread([PETFolder, 'PET_', num2str(mm_i, '%02.f'), '_usa.tif']);
-static_PET = double(static_PET)./24;
+static_PET = zeros(nrows,ncols)+0.9999; %double(static_PET)./24;
+
+%Select pixels for computations
+compgrids = find(static_PET > 0 & rain>0 & PIM >= 0 & PWM > 0 & PB > 0 & PFC > 0);
+n_compgrids = numel(compgrids);
+
+parameters.PIM = PIM(compgrids);
+parameters.PWM = PWM(compgrids);
+parameters.PFC = PFC(compgrids);
+parameters.PB = PB(compgrids);
 
 %Cold start
-SM = zeros(nrows,ncols);
-states.SM = SM(compgrids);
+pctSM = zeros(nrows,ncols)+0.;
+SM = pctSM.*PWM;
 
+ccrest_out.cSM = zeros(n_steps,n_compgrids);
+ccrest_out.aET = zeros(n_steps,n_compgrids);
+ccrest_out.cERI = zeros(n_steps,n_compgrids);
+ccrest_out.cERO = zeros(n_steps,n_compgrids);
+ccrest_out.infiltration = zeros(n_steps,n_compgrids);
+
+ccrest_states.SM = SM(compgrids);
+
+crest_out.cSM = zeros(n_steps,n_compgrids);
+crest_out.aET = zeros(n_steps,n_compgrids);
+crest_out.cERI = zeros(n_steps,n_compgrids);
+crest_out.cERO = zeros(n_steps,n_compgrids);
+crest_out.infiltration = zeros(n_steps,n_compgrids);
+
+crest_states.SM = SM(compgrids);
 tic;
 
 %Spatially Uniform Rain Rate
-rain_rate = 50;
+rain_rate = 1;
 syntheticRain = zeros(nrows,ncols)+rain_rate;
 
 time2saturation = zeros(nrows,ncols);
@@ -66,28 +85,27 @@ for period_i = 1:numel(period)
     PET = static_PET(compgrids);
 
     %CREST
-%     cSM1 = zeros(nrows,ncols);
-%     aET1 = zeros(nrows,ncols);
-%     cERI1 = zeros(nrows,ncols);
-%     cERO1 = zeros(nrows,ncols);
-%     infiltration1 = zeros(nrows,ncols);
-%     for pix = 1:numel(compgrids)
-%         parameters1.PIM = PIM(compgrids(pix));
-%         parameters1.PWM = PWM(compgrids(pix));
-%         parameters1.PFC = PFC(compgrids(pix));
-%         parameters1.PB = PB(compgrids(pix));
-%         parameters1.PKE = 1;
-%         states1.SM = SM(compgrids(pix));
-%         [cSM1(compgrids(pix)), aET1(compgrids(pix)), cERI1(compgrids(pix)), cERO1(compgrids(pix)), infiltration1(compgrids(pix))] = CRESTef5(stepHours, syntheticRain(compgrids(pix)), static_PET(compgrids(pix)), parameters1, states1);        
-%     end 
+    [vec_cSM, vec_aET, vec_cERI, vec_cERO, vec_infiltration, misc] = matCRESTef5(stepHours, Pin, PET, parameters, crest_states);
+    crest_out.cSM(period_i,:) = vec_cSM;
+    crest_out.aET(period_i,:) = vec_aET;
+    crest_out.cERI(period_i,:) = vec_cERI;
+    crest_out.cERO(period_i,:) = vec_cERO;
+    crest_out.infiltration(period_i,:) = vec_infiltration;
     
-    %[vec_cSM, vec_aET, vec_cERI, vec_cERO, vec_infiltration] = matCRESTef5(stepHours, Pin, PET, parameters, states);
-    [vec_cSM, vec_aET, vec_cERI, vec_cERO, vec_infiltration] = ccrest(stepHours, Pin, PET, parameters, states);
-    states.SM = vec_cSM;
+    crest_states.SM = vec_cSM;
+    
+    [vec_cSM, vec_aET, vec_cERI, vec_cERO, vec_infiltration, cc_misc] = ccrest(stepHours, Pin, PET, parameters, ccrest_states);
+    ccrest_out.cSM(period_i,:) = vec_cSM;
+    ccrest_out.aET(period_i,:) = vec_aET;
+    ccrest_out.cERI(period_i,:) = vec_cERI;
+    ccrest_out.cERO(period_i,:) = vec_cERO;
+    ccrest_out.infiltration(period_i,:) = vec_infiltration;
+    
+    ccrest_states.SM = vec_cSM;
     
     vec_saturated = vec_cSM./parameters.PWM;
     
-    time2saturation(compgrids(vec_saturated < 1)) = time2saturation(compgrids(vec_saturated < 1)) + 1;
+%     time2saturation(compgrids(vec_saturated < 1)) = time2saturation(compgrids(vec_saturated < 1)) + 1;
     
 %     cSM = nan(nrows,ncols);
 %     aET = nan(nrows,ncols);
@@ -113,17 +131,17 @@ end
 % cERO1 = round(cERO1.*10000)./10000;
 % infiltration1 = round(infiltration1.*10000)./10000;
 
-cSM = nan(nrows,ncols);
-aET = nan(nrows,ncols);
-cERI = nan(nrows,ncols);
-cERO = nan(nrows,ncols);
-infiltration = nan(nrows,ncols);
-
-infiltration(compgrids) = vec_infiltration;
-cSM(compgrids) = vec_cSM;
-aET(compgrids) = vec_aET;
-cERI(compgrids) = vec_cERI;
-cERO(compgrids) = vec_cERO;
+% cSM = nan(nrows,ncols);
+% aET = nan(nrows,ncols);
+% cERI = nan(nrows,ncols);
+% cERO = nan(nrows,ncols);
+% infiltration = nan(nrows,ncols);
+% 
+% infiltration(compgrids) = vec_infiltration;
+% cSM(compgrids) = vec_cSM;
+% aET(compgrids) = vec_aET;
+% cERI(compgrids) = vec_cERI;
+% cERO(compgrids) = vec_cERO;
 
 % infiltration(compgrids) = round(vec_infiltration.*10000)./10000;
 % cSM(compgrids) = round(vec_cSM.*10000)./10000;
@@ -131,3 +149,7 @@ cERO(compgrids) = vec_cERO;
 % cERI(compgrids) = round(vec_cERI.*10000)./10000;
 % cERO(compgrids) = round(vec_cERO.*10000)./10000;
 toc;
+adjPET = parameters.PKE.*PET;
+PSoil = ((Pin-adjPET).*(1-parameters.PIM))';
+target_ix = find(Pin > adjPET & SM(compgrids) < parameters.PWM & PSoil'+misc.A < misc.Wmaxm);
+numel(find(crest_out.infiltration(target_ix) > PSoil(target_ix)))
